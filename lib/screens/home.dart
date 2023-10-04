@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  const HomeScreen({Key? key});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -16,6 +16,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   int currentPage = 1;
   int perPage = 15;
+  bool isLoading = false;
 
   @override
   void initState() {
@@ -45,10 +46,7 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             TextField(
               controller: searchController,
-              onChanged: (query) {
-                // Call search function when the user types
-                searchImages(query);
-              },
+              onChanged: searchImages,
               decoration: InputDecoration(
                 suffixIcon: Icon(Icons.search),
                 hintText: 'Search',
@@ -57,24 +55,32 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             SizedBox(height: 10),
             Expanded(
-              child: GridView.builder(
-                controller: scrollController,
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  mainAxisSpacing: 2,
-                  crossAxisSpacing: 2,
-                  crossAxisCount: 3,
-                  childAspectRatio: 2 / 3,
-                ),
-                itemBuilder: (context, index) {
-                  return Container(
-                    color: Colors.white,
-                    child: Image.network(
-                      images[index]['src']['tiny'],
-                      fit: BoxFit.cover,
+              child: Stack(
+                children: [
+                  GridView.builder(
+                    controller: scrollController,
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      mainAxisSpacing: 2,
+                      crossAxisSpacing: 2,
+                      crossAxisCount: 3,
+                      childAspectRatio: 2 / 3,
                     ),
-                  );
-                },
-                itemCount: images.length,
+                    itemBuilder: (context, index) {
+                      return Container(
+                        color: Colors.white,
+                        child: Image.network(
+                          images[index]['src']['tiny'],
+                          fit: BoxFit.cover,
+                        ),
+                      );
+                    },
+                    itemCount: images.length,
+                  ),
+                  if (isLoading)
+                    Center(
+                      child: CircularProgressIndicator(),
+                    ),
+                ],
               ),
             ),
           ],
@@ -84,9 +90,17 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> fetchImageAPI() async {
+    if (isLoading) {
+      return; // Avoid making multiple simultaneous requests
+    }
+
     final query = searchController.text.isNotEmpty
         ? searchController.text
         : 'nature{}'; // Use a default query when the search field is empty
+
+    setState(() {
+      isLoading = true;
+    });
 
     final response = await http.get(
       Uri.parse(
@@ -101,8 +115,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final result = jsonDecode(response.body);
       setState(() {
         if (currentPage == 1) {
-          // If it's the first page, clear existing images
-          images.clear();
+          images.clear(); // Clear existing images only on the first page
         }
         images.addAll(result['photos']);
         currentPage++; // Increment the page for pagination
@@ -110,13 +123,17 @@ class _HomeScreenState extends State<HomeScreen> {
     } else {
       print('API request failed with status code: ${response.statusCode}');
     }
+
+    setState(() {
+      isLoading = false;
+    });
   }
 
-  void searchImages(String query) {
+  Future<void> searchImages(String query)async {
     setState(() {
       images.clear(); // Clear existing images
       currentPage = 1; // Reset current page when a new search query is entered
-      fetchImageAPI(); // Fetch new images based on the search query
+       fetchImageAPI(); // Fetch new images based on the search query
     });
   }
 
